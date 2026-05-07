@@ -1,6 +1,5 @@
 let config = null;
 
-
 // carregar config
 async function carregarConfig() {
 
@@ -11,190 +10,266 @@ async function carregarConfig() {
     });
 
     if (!res.ok) {
-      throw new Error("keys.json não encontrado");
+      throw new Error("Erro ao carregar keys.json");
     }
 
     config = await res.json();
 
-    console.log("CONFIG OK:", config);
+    console.log("CONFIG:", config);
 
   } catch (err) {
 
     console.error(err);
 
-    document.getElementById("chat").innerHTML += `
-      <div class="msg bot">
-        Erro ao carregar keys.json
-      </div>
-    `;
+    adicionarMensagem(
+      "Erro ao carregar keys.json",
+      "bot"
+    );
   }
 }
 
 carregarConfig();
 
 
-// enviar mensagem
-async function enviar() {
+// adicionar mensagem
+function adicionarMensagem(texto, tipo) {
 
-  const input = document.getElementById("input");
-  const chat = document.getElementById("chat");
+  const chat =
+    document.getElementById("chat");
 
-  const mensagem = input.value.trim();
-
-  if (!mensagem) return;
-
-  // config ainda carregando
-  if (!config) {
-
-    chat.innerHTML += `
-      <div class="msg bot">
-        Config carregando...
-      </div>
-    `;
-
-    return;
-  }
-
-  // mensagem usuário
   chat.innerHTML += `
-    <div class="msg user">
-      ${mensagem}
+    <div class="msg ${tipo}">
+      ${texto}
     </div>
   `;
 
-  // limpa input
-  input.value = "";
-
-  // scroll
-  chat.scrollTop = chat.scrollHeight;
-
-  // loading
-  const loading = document.createElement("div");
-
-  loading.className = "msg bot";
-  loading.innerHTML = "Digitando...";
-
-  chat.appendChild(loading);
-
-  chat.scrollTop = chat.scrollHeight;
-
-  // URL Azure
-  const url =
-`${config.endpoint}/openai/responses?api-version=${config.apiVersion}`;
-
-  try {
-
-    const res = await fetch(url, {
-
-      method: "POST",
-
-      headers: {
-        "Content-Type": "application/json",
-        "Authorization": `Bearer ${config.apiKey}`
-      },
-
-      body: JSON.stringify({
-
-        model: config.model,
-
-        input: mensagem,
-
-        max_output_tokens: 1000
-
-      })
-
-    });
-
-    const data = await res.json();
-
-    console.log("RESPOSTA AZURE:");
-    console.log(data);
-
-    let resposta = "Sem resposta";
-
-    // formato novo
-    if (data.output_text) {
-
-      resposta = data.output_text;
-
-    }
-
-    // formato array
-    else if (
-      data.output &&
-      data.output.length > 0
-    ) {
-
-      for (const item of data.output) {
-
-        if (
-          item.type === "message" &&
-          item.content
-        ) {
-
-          for (const content of item.content) {
-
-            if (
-              content.type === "output_text" &&
-              content.text
-            ) {
-
-              resposta = content.text;
-              break;
-            }
-          }
-        }
-      }
-    }
-
-    // fallback antigo
-    else if (
-      data.choices &&
-      data.choices.length > 0
-    ) {
-
-      resposta =
-        data.choices[0]?.message?.content ||
-        "Sem resposta";
-    }
-
-    // remove loading
-    loading.remove();
-
-    // resposta bot
-    chat.innerHTML += `
-      <div class="msg bot">
-        ${resposta}
-      </div>
-    `;
-
-    // scroll
-    chat.scrollTop = chat.scrollHeight;
-
-  } catch (err) {
-
-    console.error("ERRO:", err);
-
-    loading.remove();
-
-    chat.innerHTML += `
-      <div class="msg bot">
-        Erro de conexão com Azure
-      </div>
-    `;
-
-    chat.scrollTop = chat.scrollHeight;
-  }
+  chat.scrollTop =
+    chat.scrollHeight;
 }
 
 
-// enviar com Enter
-document
-  .getElementById("input")
-  .addEventListener("keypress", function(e) {
+// ENTER envia
+document.addEventListener("DOMContentLoaded", () => {
+
+  const input =
+    document.getElementById("input");
+
+  input.addEventListener("keydown", (e) => {
 
     if (e.key === "Enter") {
       enviar();
     }
-
+  });
 });
+
+
+// enviar
+async function enviar() {
+
+  const input =
+    document.getElementById("input");
+
+  const providerEl =
+    document.getElementById("provider");
+
+  // compatível com html antigo e novo
+  const provider =
+    providerEl ? providerEl.value : "azure";
+
+  const mensagem =
+    input.value.trim();
+
+  if (!mensagem) return;
+
+  // config
+  if (!config) {
+
+    adicionarMensagem(
+      "Config carregando...",
+      "bot"
+    );
+
+    return;
+  }
+
+  // usuário
+  adicionarMensagem(
+    `Você: ${mensagem}`,
+    "user"
+  );
+
+  input.value = "";
+
+  // loading
+  adicionarMensagem(
+    "Digitando...",
+    "bot"
+  );
+
+  const loading =
+    document.querySelectorAll(".bot");
+
+  const ultimoLoading =
+    loading[loading.length - 1];
+
+  let resposta = "Sem resposta";
+
+  try {
+
+    // =================================
+    // AZURE / CHATGPT
+    // =================================
+    if (provider === "azure") {
+
+      const url =
+        `${config.azure.endpoint}/openai/responses?api-version=${config.azure.apiVersion}`;
+
+      const res = await fetch(url, {
+
+        method: "POST",
+
+        headers: {
+          "Content-Type": "application/json",
+          "api-key": config.azure.apiKey
+        },
+
+        body: JSON.stringify({
+          model: config.azure.model,
+          input: mensagem,
+          max_output_tokens: 500
+        })
+      });
+
+      const data = await res.json();
+
+      console.log("AZURE:");
+      console.log(data);
+
+      // responses api
+      if (data.output) {
+
+        for (const item of data.output) {
+
+          if (
+            item.type === "message" &&
+            item.content
+          ) {
+
+            for (const content of item.content) {
+
+              if (
+                content.type === "output_text"
+              ) {
+
+                resposta =
+                  content.text;
+              }
+            }
+          }
+        }
+      }
+
+      // fallback antigo
+      else if (
+        data.choices &&
+        data.choices.length > 0
+      ) {
+
+        resposta =
+          data.choices[0]
+          ?.message
+          ?.content ||
+          "Sem resposta";
+      }
+
+      // erro
+      if (data.error) {
+
+        resposta =
+          "Erro Azure: " +
+          data.error.message;
+      }
+    }
+
+    // =================================
+    // GEMINI
+    // =================================
+    else if (provider === "gemini") {
+
+      const url =
+        `https://generativelanguage.googleapis.com/v1beta/models/${config.gemini.model}:generateContent?key=${config.gemini.apiKey}`;
+
+      const res = await fetch(url, {
+
+        method: "POST",
+
+        headers: {
+          "Content-Type": "application/json"
+        },
+
+        body: JSON.stringify({
+          contents: [
+            {
+              parts: [
+                {
+                  text: mensagem
+                }
+              ]
+            }
+          ]
+        })
+      });
+
+      const data = await res.json();
+
+      console.log("GEMINI:");
+      console.log(JSON.stringify(data, null, 2));
+
+      // resposta
+      if (
+        data.candidates &&
+        data.candidates.length > 0
+      ) {
+
+        resposta =
+          data.candidates[0]
+          ?.content
+          ?.parts?.[0]
+          ?.text ||
+          "Sem resposta";
+      }
+
+      // erro
+      if (data.error) {
+
+        resposta =
+          "Erro Gemini: " +
+          data.error.message;
+      }
+    }
+
+    // remove loading
+    if (ultimoLoading) {
+      ultimoLoading.remove();
+    }
+
+    // resposta final
+    adicionarMensagem(
+      `Bot: ${resposta}`,
+      "bot"
+    );
+
+  } catch (err) {
+
+    console.error(err);
+
+    if (ultimoLoading) {
+      ultimoLoading.remove();
+    }
+
+    adicionarMensagem(
+      "Erro de conexão",
+      "bot"
+    );
+  }
+}
