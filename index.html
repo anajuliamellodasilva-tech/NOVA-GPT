@@ -1,23 +1,44 @@
 <!DOCTYPE html>
 <html lang="pt-br">
+
 <head>
   <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>NovaGPT</title>
+
   <link rel="stylesheet" href="style.css">
 </head>
+
 <body>
 
-<div class="container">
-  <h1>🤖 NovaGPT</h1>
+  <div class="container">
 
-  <div id="chat"></div>
+    <h1>🤖 NovaGPT</h1>
 
-  <div class="input-area">
-    <input id="input" placeholder="Digite algo...">
-    <button onclick="send()">➤</button>
+    <div id="chat">
+
+      <div class="msg bot">
+        Olá! Como posso ajudar?
+      </div>
+
+    </div>
+
+    <div class="input-area">
+
+      <input
+        type="text"
+        id="input"
+        placeholder="Digite algo..."
+        autocomplete="off"
+      >
+
+      <button onclick="enviar()">➤</button>
+
+    </div>
+
   </div>
-</div>
 
-<script src="script.js"></script>
+  <script src="script.js"></script>
+
 </body>
 </html>
