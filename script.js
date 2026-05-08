@@ -1,275 +1,278 @@
 let config = null;
+let enviando = false;
+let audioAtual = null;
 
-// carregar config
+// ===========================
+// CONFIG
+// ===========================
 async function carregarConfig() {
-
   try {
+    const res = await fetch("./keys.json", { cache: "no-store" });
 
-    const res = await fetch("./keys.json", {
-      cache: "no-store"
-    });
-
-    if (!res.ok) {
-      throw new Error("Erro ao carregar keys.json");
-    }
+    if (!res.ok) throw new Error("Erro config");
 
     config = await res.json();
 
-    console.log("CONFIG:", config);
+    console.log("CONFIG OK");
 
   } catch (err) {
-
     console.error(err);
-
-    adicionarMensagem(
-      "Erro ao carregar keys.json",
-      "bot"
-    );
+    adicionarMensagem("Erro ao carregar config", "bot");
   }
 }
 
 carregarConfig();
 
-
-// adicionar mensagem
+// ===========================
+// CHAT
+// ===========================
 function adicionarMensagem(texto, tipo) {
+  const chat = document.getElementById("chat");
 
-  const chat =
-    document.getElementById("chat");
+  const div = document.createElement("div");
+  div.className = `msg ${tipo}`;
+  div.innerHTML = texto;
 
-  chat.innerHTML += `
-    <div class="msg ${tipo}">
-      ${texto}
-    </div>
-  `;
-
-  chat.scrollTop =
-    chat.scrollHeight;
+  chat.appendChild(div);
+  chat.scrollTop = chat.scrollHeight;
 }
 
-
-// ENTER envia
-document.addEventListener("DOMContentLoaded", () => {
-
-  const input =
-    document.getElementById("input");
-
-  input.addEventListener("keydown", (e) => {
-
-    if (e.key === "Enter") {
-      enviar();
-    }
-  });
-});
-
-
-// enviar
+// ===========================
+// ENVIAR (TEXT + VOZ)
+// ===========================
 async function enviar() {
 
-  const input =
-    document.getElementById("input");
+  if (enviando) return;
 
-  const providerEl =
-    document.getElementById("provider");
+  const input = document.getElementById("input");
+  const provider = document.getElementById("provider").value;
 
-  // compatível com html antigo e novo
-  const provider =
-    providerEl ? providerEl.value : "azure";
-
-  const mensagem =
-    input.value.trim();
-
+  const mensagem = input.value.trim();
   if (!mensagem) return;
 
-  // config
   if (!config) {
-
-    adicionarMensagem(
-      "Config carregando...",
-      "bot"
-    );
-
+    adicionarMensagem("Carregando config...", "bot");
     return;
   }
 
-  // usuário
-  adicionarMensagem(
-    `Você: ${mensagem}`,
-    "user"
-  );
+  enviando = true;
 
+  adicionarMensagem(mensagem, "user");
   input.value = "";
 
-  // loading
-  adicionarMensagem(
-    "Digitando...",
-    "bot"
-  );
+  adicionarMensagem("Digitando...", "bot");
 
-  const loading =
-    document.querySelectorAll(".bot");
+  const loading = document.querySelectorAll(".bot");
+  const last = loading[loading.length - 1];
 
-  const ultimoLoading =
-    loading[loading.length - 1];
-
-  let resposta = "Sem resposta";
+  let resposta = "";
 
   try {
 
-    // =================================
-    // AZURE / CHATGPT
-    // =================================
+    // ===========================
+    // AZURE
+    // ===========================
     if (provider === "azure") {
 
-      const url =
-        `${config.azure.endpoint}/openai/responses?api-version=${config.azure.apiVersion}`;
+      const url = `${config.azure.endpoint}/openai/responses?api-version=${config.azure.apiVersion}`;
 
       const res = await fetch(url, {
-
         method: "POST",
-
         headers: {
           "Content-Type": "application/json",
           "api-key": config.azure.apiKey
         },
-
         body: JSON.stringify({
           model: config.azure.model,
           input: mensagem,
-          max_output_tokens: 500
+          max_output_tokens: 500,
+          instructions: "Você é um assistente chamado NovaGPT. Responda em português, curto e natural."
         })
       });
 
       const data = await res.json();
 
-      console.log("AZURE:");
-      console.log(data);
+      console.log("AZURE:", data);
 
-      // responses api
-      if (data.output) {
+      let texto = "";
 
+      if (data?.output) {
         for (const item of data.output) {
-
-          if (
-            item.type === "message" &&
-            item.content
-          ) {
-
-            for (const content of item.content) {
-
-              if (
-                content.type === "output_text"
-              ) {
-
-                resposta =
-                  content.text;
-              }
+          if (item?.content) {
+            for (const c of item.content) {
+              if (c?.text) texto += c.text;
             }
           }
         }
       }
 
-      // fallback antigo
-      else if (
-        data.choices &&
-        data.choices.length > 0
-      ) {
+      resposta =
+        texto ||
+        data?.output_text ||
+        data?.choices?.[0]?.message?.content ||
+        "Sem resposta";
 
-        resposta =
-          data.choices[0]
-          ?.message
-          ?.content ||
-          "Sem resposta";
-      }
-
-      // erro
-      if (data.error) {
-
-        resposta =
-          "Erro Azure: " +
-          data.error.message;
+      if (data?.error) {
+        resposta = "Erro Azure: " + data.error.message;
       }
     }
 
-    // =================================
+    // ===========================
     // GEMINI
-    // =================================
+    // ===========================
     else if (provider === "gemini") {
 
-      const url =
-        `https://generativelanguage.googleapis.com/v1beta/models/${config.gemini.model}:generateContent?key=${config.gemini.apiKey}`;
+      const url = `https://generativelanguage.googleapis.com/v1beta/models/${config.gemini.model}:generateContent?key=${config.gemini.apiKey}`;
 
       const res = await fetch(url, {
-
         method: "POST",
-
         headers: {
           "Content-Type": "application/json"
         },
-
         body: JSON.stringify({
-          contents: [
-            {
-              parts: [
-                {
-                  text: mensagem
-                }
-              ]
-            }
-          ]
+          contents: [{
+            parts: [{ text: mensagem }]
+          }]
         })
       });
 
       const data = await res.json();
 
-      console.log("GEMINI:");
-      console.log(JSON.stringify(data, null, 2));
+      console.log("GEMINI:", data);
 
-      // resposta
-      if (
-        data.candidates &&
-        data.candidates.length > 0
-      ) {
+      resposta =
+        data?.candidates?.[0]?.content?.parts?.[0]?.text ||
+        "Sem resposta";
 
-        resposta =
-          data.candidates[0]
-          ?.content
-          ?.parts?.[0]
-          ?.text ||
-          "Sem resposta";
-      }
-
-      // erro
-      if (data.error) {
-
-        resposta =
-          "Erro Gemini: " +
-          data.error.message;
+      if (data?.error) {
+        resposta = "Erro Gemini: " + data.error.message;
       }
     }
 
-    // remove loading
-    if (ultimoLoading) {
-      ultimoLoading.remove();
-    }
+    if (last) last.remove();
 
-    // resposta final
-    adicionarMensagem(
-      `Bot: ${resposta}`,
-      "bot"
-    );
+    adicionarMensagem(resposta, "bot");
+
+    falarTexto(resposta);
 
   } catch (err) {
-
     console.error(err);
 
-    if (ultimoLoading) {
-      ultimoLoading.remove();
+    if (last) last.remove();
+
+    adicionarMensagem("Erro de conexão", "bot");
+
+  } finally {
+    enviando = false;
+  }
+}
+
+// ===========================
+// VOZ (TTS)
+// ===========================
+async function falarTexto(texto) {
+
+  try {
+
+    if (!config?.azureSpeech) return;
+
+    if (audioAtual) {
+      audioAtual.pause();
+      audioAtual = null;
     }
 
-    adicionarMensagem(
-      "Erro de conexão",
-      "bot"
-    );
+    const ssml = `
+<speak version='1.0' xml:lang='pt-BR'>
+  <voice name='${config.azureSpeech.voice}'>
+    ${texto}
+  </voice>
+</speak>`;
+
+    const res = await fetch(config.azureSpeech.endpoint, {
+      method: "POST",
+      headers: {
+        "Ocp-Apim-Subscription-Key": config.azureSpeech.apiKey,
+        "Content-Type": "application/ssml+xml",
+        "X-Microsoft-OutputFormat": config.azureSpeech.audioFormat
+      },
+      body: ssml
+    });
+
+    const blob = await res.blob();
+
+    const url = URL.createObjectURL(blob);
+
+    audioAtual = new Audio(url);
+
+    await audioAtual.play();
+
+  } catch (err) {
+    console.error("TTS erro:", err);
   }
+}
+
+// ===========================
+// MICROFONE (WHATSAPP STYLE)
+// ===========================
+let reconhecimento;
+let gravando = false;
+
+function ativarVoz() {
+
+  const btn = document.getElementById("btn-voz");
+
+  if (!("webkitSpeechRecognition" in window)) {
+    adicionarMensagem("Sem suporte de voz", "bot");
+    return;
+  }
+
+  if (gravando) {
+    reconhecimento.stop();
+    return;
+  }
+
+  reconhecimento = new webkitSpeechRecognition();
+
+  reconhecimento.lang = "pt-BR";
+  reconhecimento.continuous = true;
+  reconhecimento.interimResults = true;
+
+  gravando = true;
+
+  btn.innerHTML = "⏹️";
+  btn.style.background = "#ff0000";
+
+  reconhecimento.start();
+
+  reconhecimento.onresult = (event) => {
+    let texto = "";
+
+    for (let i = event.resultIndex; i < event.results.length; i++) {
+      texto += event.results[i][0].transcript;
+    }
+
+    document.getElementById("input").value = texto;
+  };
+
+  reconhecimento.onend = async () => {
+
+    gravando = false;
+
+    btn.innerHTML = "🎤";
+    btn.style.background = "#6c5ce7";
+
+    const texto = document.getElementById("input").value.trim();
+
+    if (texto) await enviar();
+  };
+
+  reconhecimento.onerror = () => {
+
+    gravando = false;
+
+    btn.innerHTML = "🎤";
+    btn.style.background = "#6c5ce7";
+
+    adicionarMensagem("Erro no microfone", "bot");
+  };
 }
