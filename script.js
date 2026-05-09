@@ -67,6 +67,20 @@ async function enviar() {
 
   let resposta = "";
 
+  // ===========================
+  // 🔥 DATA REAL DO SISTEMA (TRAVADA)
+  // ===========================
+  const agora = new Date();
+
+  const dataHora = agora.toLocaleString("pt-BR", {
+    weekday: "long",
+    year: "numeric",
+    month: "long",
+    day: "2-digit",
+    hour: "2-digit",
+    minute: "2-digit"
+  });
+
   try {
 
     // ===========================
@@ -86,7 +100,11 @@ async function enviar() {
           model: config.azure.model,
           input: mensagem,
           max_output_tokens: 500,
-          instructions: "Você é um assistente chamado NovaGPT. Responda em português, curto e natural."
+
+          instructions:
+            "Você é um assistente chamado NovaGPT. Responda em português, curto e natural. " +
+            "DATA OFICIAL DO SISTEMA: " + dataHora + ". " +
+            "NUNCA invente datas, anos ou dia da semana. Use apenas essa data como verdade."
         })
       });
 
@@ -131,7 +149,12 @@ async function enviar() {
         },
         body: JSON.stringify({
           contents: [{
-            parts: [{ text: mensagem }]
+            parts: [{
+              text:
+                "DATA OFICIAL DO SISTEMA: " + dataHora +
+                "\n\n" + mensagem +
+                "\n\nNUNCA invente data, ano ou dia da semana. Use apenas a data informada."
+            }]
           }]
         })
       });
@@ -212,7 +235,7 @@ async function falarTexto(texto) {
 }
 
 // ===========================
-// MICROFONE (WHATSAPP STYLE)
+// MICROFONE
 // ===========================
 let reconhecimento;
 let gravando = false;
